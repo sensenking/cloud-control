@@ -1,0 +1,85 @@
+# ======================
+# 1. Java SpringBoot 云端服务
+# ======================
+target/
+*.class
+*.log
+.idea/
+.vscode/
+*.iml
+maven-wrapper/
+*.tmp
+.DS_Store
+application-dev.yml
+application-local.yml
+
+# ======================
+# 2. C# WinForms 上位机
+# ======================
+bin/
+obj/
+*.exe
+*.pdb
+*.user
+*.suo
+*.cache
+.vs/
+packages/
+*.log
+*.bak
+*.csv
+*.txt
+
+# ======================
+# 3. Keil MDK / 51单片机工程（重点新增）
+# ======================
+# 编译输出文件
+Objects/
+Listings/
+*.hex
+*.bin
+*.axf
+*.elf
+*.map
+*.crf
+*.d
+*.o
+*.lst
+*.lnp
+*.sct
+*.tra
+*.dep
+
+# Keil 工程临时/缓存文件
+*.uvgui
+*.uvgui.*
+*.opt
+*.bak
+*.i
+*.srec
+*.htm
+*.s
+*.lst
+*.m51
+
+# 调试仿真文件
+*.dbg
+*.dbgconf
+*.ini
+*.txt
+
+# ST-Link/仿真器缓存
+_RTE_/
+RTE/
+
+# ======================
+# 系统通用垃圾文件
+# ======================
+.DS_Store
+Thumbs.db
+*.zip
+*.rar
+*.7z
+*.pdf
+*.mp4
+*.avi

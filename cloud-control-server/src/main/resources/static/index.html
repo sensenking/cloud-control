@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLOUD-CONTROL | 云端工业级虚拟双通道示波器与多参量调谐系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-dark: #070b14;
+            --panel-bg: #0f1524;
+            --border-tech: #1e293b;
+            --neon-cyan: #00f2fe;
+            --neon-green: #00f5a0;
+            --neon-yellow: #fede00;
+            --neon-red: #ff4a5a;
+            --text-main: #f1f5f9;
+            --text-muted: #64748b;
+            --grid-color: rgba(0, 242, 254, 0.03);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Consolas', 'Courier New', monospace; }
+        body { background-color: var(--bg-dark); color: var(--text-main); padding: 15px; }
+        body::before {
+            content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(var(--grid-color) 1px, transparent 1px), linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 25px 25px; z-index: -1; pointer-events: none;
+        }
+
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-bottom: 12px; border-bottom: 2px solid var(--neon-cyan); margin-bottom: 15px;
+            box-shadow: 0 0 12px rgba(0, 242, 254, 0.15);
+        }
+        .logo-area h1 { font-size: 22px; color: var(--neon-cyan); text-shadow: 0 0 6px rgba(0, 242, 254, 0.5); letter-spacing: 1px; }
+        .logo-area span { font-size: 11px; color: var(--text-muted); }
+        .system-status { display: flex; gap: 15px; font-size: 12px; }
+        .status-node { background: rgba(30, 41, 59, 0.4); padding: 5px 10px; border: 1px solid var(--border-tech); border-radius: 4px; }
+        .status-online { color: var(--neon-green); text-shadow: 0 0 4px rgba(0,245,160,0.4); }
+
+        .dashboard-grid { display: grid; grid-template-columns: 2.8fr 1.2fr; gap: 15px; }
+        .left-column { display: flex; flex-direction: column; gap: 15px; }
+
+        .panel { background-color: var(--panel-bg); border: 1px solid var(--border-tech); border-radius: 4px; padding: 12px; position: relative; }
+        .panel::after { content: ""; position: absolute; top: 0; right: 0; width: 8px; height: 8px; border-top: 2px solid var(--neon-cyan); border-right: 2px solid var(--neon-cyan); }
+        .panel-title { font-size: 13px; color: #94a3b8; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; border-left: 3px solid var(--neon-cyan); padding-left: 8px; }
+
+        .scope-controls { display: flex; gap: 15px; background: rgba(7, 11, 20, 0.6); padding: 8px; border-radius: 4px; border: 1px dashed var(--border-tech); margin-bottom: 10px; font-size: 11px; }
+        .ctrl-group { display: flex; align-items: center; gap: 6px; }
+        .ctrl-group label { color: var(--text-muted); }
+        .ctrl-group input, .ctrl-group select { background: #070b14; border: 1px solid var(--border-tech); color: var(--neon-cyan); padding: 3px 6px; border-radius: 3px; text-align: center; }
+        .ctrl-group input { width: 65px; }
+        .ctrl-group select { width: 180px; text-align-last: center; cursor: pointer; font-weight: bold; }
+
+        .oscilloscope-window { background-color: #03060f; border: 2px solid #0b0f19; border-radius: 4px; height: 350px; width: 100%; }
+
+        .param-matrix { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .param-node { display: flex; flex-direction: column; gap: 4px; background: rgba(30, 41, 59, 0.2); padding: 8px; border: 1px solid rgba(30,41,59,0.5); border-radius: 3px; }
+        .param-node label { font-size: 11px; color: var(--text-muted); text-transform: capitalize; }
+        .param-node input { background: #070b14; border: 1px solid var(--border-tech); color: var(--neon-green); padding: 5px; font-size: 13px; font-weight: bold; border-radius: 3px; }
+
+        .telemetry-sidebar { display: flex; flex-direction: column; gap: 10px; }
+        .metric-section-title { font-size: 11px; color: var(--neon-cyan); letter-spacing: 1px; margin-top: 5px; border-bottom: 1px solid rgba(0, 242, 254, 0.1); padding-bottom: 3px; text-transform: uppercase;}
+
+        .metric-grid { display: grid; grid-template-columns: 1fr; gap: 6px; }
+        .metric-node { background: rgba(7, 11, 20, 0.5); border: 1px solid rgba(30,41,59,0.5); padding: 8px; display: flex; justify-content: space-between; align-items: center; border-radius: 3px; }
+        .metric-label { font-size: 11px; color: #94a3b8; }
+        .metric-value { font-size: 14px; font-weight: bold; color: var(--text-main); }
+
+        .c-cyan { color: var(--neon-cyan) !important; }
+        .c-green { color: var(--neon-green) !important; }
+        .c-yellow { color: var(--neon-yellow) !important; }
+        .c-red { color: var(--neon-red) !important; }
+
+        .action-btn { background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid var(--neon-cyan); color: var(--neon-cyan); padding: 8px 16px; font-size: 12px; font-weight: bold; cursor: pointer; border-radius: 3px; transition: all 0.2s; }
+        .action-btn:hover { background: var(--neon-cyan); color: var(--bg-dark); box-shadow: 0 0 10px var(--neon-cyan); }
+        .submit-btn { border-color: var(--neon-green); color: var(--neon-green); width: 100%; margin-top: 10px; padding: 10px; font-size: 13px; }
+        .submit-btn:hover { background: var(--neon-green); color: var(--bg-dark); box-shadow: 0 0 10px var(--neon-green); }
+
+        .toast-msg { font-size: 11px; color: var(--neon-green); text-align: center; margin-top: 5px; min-height: 15px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo-area">
+        <h1>CLOUD-CONTROL LAB SCOPE</h1>
+        <span>云端工业控制回路双通道示波器与多维度链路诊断控制台</span>
+    </div>
+    <div class="system-status">
+        <div class="status-node">通信速率: <span id="hzTopIndicator" class="c-green">0.0 Hz</span></div>
+        <div class="status-node">状态脉搏: <span class="status-online" id="srvStatus">OFFLINE</span></div>
+    </div>
+</header>
+
+<div class="dashboard-grid">
+    <div class="left-column">
+        <div class="panel">
+            <div class="panel-title">
+                <span>双通道波形捕获视窗 (OSCILLOSCOPE SCREEN)</span>
+                <button class="action-btn" id="exportCsvBtn" style="padding: 3px 8px; font-size: 11px;">导出全量历史CSV</button>
+            </div>
+
+            <div class="scope-controls">
+                <div class="ctrl-group">
+                    <label>时基缩放 (X轴帧数):</label>
+                    <input type="number" id="cfgXWidth" value="50" min="10" max="200" step="10">
+                </div>
+                <div class="ctrl-group">
+                    <label>通道A上限 (转速RPM):</label>
+                    <input type="number" id="cfgYActualMax" value="2500" min="500" max="5000" step="100">
+                </div>
+                <div class="ctrl-group">
+                    <label>通道B上限 (PWM占空比):</label>
+                    <input type="number" id="cfgYPwmMax" value="250" min="100" max="1000" step="50">
+                </div>
+                <div class="ctrl-group" style="margin-left: auto;">
+                    <input type="checkbox" id="cfgShowAllHistory" style="width: auto; cursor: pointer;">
+                    <label for="cfgShowAllHistory" style="color: var(--neon-cyan); font-weight: bold; cursor: pointer;">展现全时段历史完整波形</label>
+                </div>
+            </div>
+
+            <div class="oscilloscope-window">
+                <canvas id="scopeCanvas"></canvas>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title">
+                <span>在线闭环回路配置与参数动态调谐矩阵 (ONLINE PARAMETER MODIFICATION)</span>
+                <div class="ctrl-group" style="display:inline-flex; align-items:center;">
+                    <label style="color:var(--neon-cyan); font-weight:bold; margin-right:5px;">当前核心控制算法:</label>
+                    <select id="algoSelectMenu"><option value="">加载中...</option></select>
+                </div>
+            </div>
+
+            <div class="param-matrix" id="dynamicParamMatrix">
+                <div class="param-node">
+                    <label>Target Speed (目标转速 RPM)</label>
+                    <input type="number" id="inTargetSpeed" value="1500" step="50">
+                </div>
+                <div class="param-node">
+                    <label>Desired Rate (下发通信速率 Hz)</label>
+                    <input type="number" id="inTargetHz" value="20.0" min="1.0" max="200.0" step="5.0">
+                </div>
+                <div class="param-node" style="display: flex; flex-direction: row; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 11px; color: var(--text-muted);">网络栈接收网闸：</span>
+                    <button class="action-btn" id="togglePauseBtn" style="border-color: var(--neon-yellow); color: var(--neon-yellow); width: auto; padding: 4px 12px;">网闸：持续接收中</button>
+                </div>
+            </div>
+
+            <button class="action-btn submit-btn" id="submitParamsBtn">向云端业务执行器注入更新参数</button>
+            <div class="toast-msg" id="paramToast"></div>
+        </div>
+    </div>
+
+    <div class="panel telemetry-sidebar">
+        <div class="panel-title">云端一体化全量可观测指标监测矩阵</div>
+
+        <div class="metric-section-title">1. 核心控制指标 (Core Control)</div>
+        <div class="metric-grid">
+            <div class="metric-node"><span class="metric-label">Target Speed (设定转速)</span><span class="metric-value c-cyan" id="mTargetSpeed">0.0 RPM</span></div>
+            <div class="metric-node"><span class="metric-label">Actual Speed (实际转速)</span><span class="metric-value c-cyan" id="mActualSpeed">0.0 RPM</span></div>
+            <div class="metric-node"><span class="metric-label">Output PWM (计算占空比)</span><span class="metric-value c-yellow" id="mOutputPwm">0</span></div>
+            <div class="metric-node"><span class="metric-label">Active Algorithm (工作算法)</span><span class="metric-value c-green" id="mActiveAlgo">-</span></div>
+        </div>
+
+        <div class="metric-section-title">2. 通信周期与速率 (Sampling & Rate)</div>
+        <div class="metric-grid">
+            <div class="metric-node"><span class="metric-label">Target Freq (理论频率)</span><span class="metric-value" id="mTargetFrequency">0.0 Hz</span></div>
+            <div class="metric-node"><span class="metric-label">Actual Freq (实际速率)</span><span class="metric-value c-green" id="mActualFrequency">0.0 Hz</span></div>
+            <div class="metric-node"><span class="metric-label">Arrive Interval (到达间隔)</span><span class="metric-value" id="mCommInterval">0 ms</span></div>
+            <div class="metric-node"><span class="metric-label">Interval Jitter (到达抖动)</span><span class="metric-value c-yellow" id="mJitter">0 ms</span></div>
+        </div>
+
+        <div class="metric-section-title">3. 时延与链路元数据 (Latency & Link)</div>
+        <div class="metric-grid">
+            <div class="metric-node"><span class="metric-label">Sequence Num (接收帧序)</span><span class="metric-value" id="mSequenceNumber">0</span></div>
+            <div class="metric-node"><span class="metric-label">RTT (往返时延)</span><span class="metric-value c-green" id="mRtt">0 ms</span></div>
+            <div class="metric-node"><span class="metric-label">One-Way Latency (单向时延)</span><span class="metric-value c-green" id="mLatency">0 ms</span></div>
+            <div class="metric-node"><span class="metric-label">Dispatch Latency (下发耗时)</span><span class="metric-value" id="mDispatchLatency">0 μs</span></div>
+        </div>
+
+        <div class="metric-section-title">4. 吞吐速率与物理层 (Throughput)</div>
+        <div class="metric-grid">
+            <div class="metric-node"><span class="metric-label">Base Bandwidth (基础带宽)</span><span class="metric-value c-cyan" id="mBaseBandwidth">0.0 Kbps</span></div>
+            <div class="metric-node"><span class="metric-label">TCP Max Limit (TCP极限)</span><span class="metric-value c-green" id="mTcpLimit">0.00 Mbps</span></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ==========================================
+    // 1. 全局配置与 Chart.js 示波器画布初始化
+    // ==========================================
+    const cfgXWidth = document.getElementById('cfgXWidth');
+    const cfgYActualMax = document.getElementById('cfgYActualMax');
+    const cfgYPwmMax = document.getElementById('cfgYPwmMax');
+    const cfgShowAllHistory = document.getElementById('cfgShowAllHistory');
+
+    const ctx = document.getElementById('scopeCanvas').getContext('2d');
+    const scopeChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                { label: '通道A: 实际转速 (RPM)', data: [], borderColor: '#00f2fe', borderWidth: 2, pointRadius: 0, lineTension: 0.1, yAxisID: 'y-speed' },
+                { label: '通道B: PWM占空比', data: [], borderColor: '#fede00', borderWidth: 2, pointRadius: 0, lineTension: 0.1, yAxisID: 'y-pwm' }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            animation: false,
+            scales: {
+                x: { grid: { color: 'rgba(30, 41, 59, 0.2)' }, ticks: { display: false } },
+                'y-speed': { type: 'linear', position: 'left', min: 0, max: parseInt(cfgYActualMax.value), grid: { color: 'rgba(0, 242, 254, 0.04)' }, ticks: { color: '#00f2fe' } },
+                'y-pwm': { type: 'linear', position: 'right', min: 0, max: parseInt(cfgYPwmMax.value), grid: { drawOnChartArea: false }, ticks: { color: '#fede00' } }
+            },
+            plugins: { legend: { labels: { color: '#f1f5f9' } } }
+        }
+    });
+
+    cfgYActualMax.addEventListener('input', () => {
+        scopeChart.options.scales['y-speed'].max = parseInt(cfgYActualMax.value) || 2500;
+        scopeChart.update('none');
+    });
+    cfgYPwmMax.addEventListener('input', () => {
+        scopeChart.options.scales['y-pwm'].max = parseInt(cfgYPwmMax.value) || 250;
+        scopeChart.update('none');
+    });
+
+    // ==========================================
+    // 2. 方案 A：全动态参数矩阵元数据中心与渲染核心
+    // ==========================================
+    const algoSelectMenu = document.getElementById('algoSelectMenu');
+    let activeServerAlgo = "";       // 服务器当前激活的算法标识
+    let focusedInputId = null;       // 🔒 焦点防护锁：当前被操作员点击选中的输入框 ID
+    let supportedAlgorithmsMeta = {};// 全量算法的静态结构缓存
+
+    // 🌟 映射美化别名字典，将后端类名转换为可读的工业术语
+    const algoNameDict = {
+        "pidController": "标准位置式 PID 控制器",
+        "adaptivePidController": "自适应参数 PID 控制器",
+        "smithPredictorController": "史密斯滞后预估控制器",
+        "fuzzyPiController": "模糊自增益 PI 控制器",
+        "timeDelayAdaptivePredictiveController": "时延自适应预测控制器"
+    };
+
+    // 🌟 方案 A 渲染引擎：根据算法元数据动态重绘参数输入项
+    function renderDynamicForm(algoName, currentParamsMap) {
+        if (!supportedAlgorithmsMeta[algoName]) return;
+
+        // 1. 提取该算法对应的所有可用 Key
+        const paramKeys = Object.keys(supportedAlgorithmsMeta[algoName]);
+
+        // 2. 清理上一次生成的动态输入框节点（保留前 3 个全局公共控制项）
+        const matrixContainer = document.getElementById('dynamicParamMatrix');
+        const originalNodes = matrixContainer.querySelectorAll('.param-node');
+        for (let i = 3; i < originalNodes.length; i++) {
+            originalNodes[i].remove();
+        }
+
+        // 3. 动态追加特定算法专属输入框
+        paramKeys.forEach(key => {
+            const val = currentParamsMap && currentParamsMap[key] !== undefined ? currentParamsMap[key] : supportedAlgorithmsMeta[algoName][key];
+
+            const node = document.createElement('div');
+            node.className = 'param-node';
+            node.innerHTML = `
+                <label>${key} (${algoNameDict[algoName] || '参数'})</label>
+                <input type="number" id="in_${key}" step="0.001" value="${val}">
+            `;
+            matrixContainer.appendChild(node);
+
+            // 4. 🔒 挂载焦点防护锁：输入框获得焦点时阻止高频遥测刷新覆盖，失去焦点时解锁
+            const inputEl = document.getElementById(`in_${key}`);
+            inputEl.addEventListener('focus', () => { focusedInputId = `in_${key}`; });
+            inputEl.addEventListener('blur', () => { focusedInputId = null; });
+        });
+    }
+
+    // 🔒 为静态输入框挂载焦点锁
+    ['inTargetSpeed', 'inTargetHz'].forEach(id => {
+        const el = document.getElementById(id);
+        el.addEventListener('focus', () => { focusedInputId = id; });
+        el.addEventListener('blur', () => { focusedInputId = null; });
+    });
+
+    // 初始化：异步加载后端注册的所有算法元数据
+    function loadAlgorithmsMetadata() {
+        fetch('/api/control/meta')
+            .then(res => res.json())
+            .then(res => {
+                if (res.status === 'success') {
+                    supportedAlgorithmsMeta = res.meta.supportedAlgorithms;
+                    activeServerAlgo = res.meta.currentAlgorithm;
+
+                    // 动态填充下拉菜单
+                    algoSelectMenu.innerHTML = '';
+                    Object.keys(supportedAlgorithmsMeta).forEach(key => {
+                        const option = document.createElement('option');
+                        option.value = key;
+                        option.innerText = algoNameDict[key] || key;
+                        algoSelectMenu.appendChild(option);
+                    });
+
+                    // 联动选中服务器当前正运行的算法
+                    algoSelectMenu.value = activeServerAlgo;
+
+                    // 执行初次动态渲染
+                    renderDynamicForm(activeServerAlgo, supportedAlgorithmsMeta[activeServerAlgo]);
+                }
+            })
+            .catch(err => console.error("读取后端算法元数据矩阵失败", err));
+    }
+
+    // 监听：用户手动在页面切换算法下拉框（向后端下发切换指令）
+    algoSelectMenu.addEventListener('change', () => {
+        const targetAlgo = algoSelectMenu.value;
+        if (!targetAlgo || targetAlgo === activeServerAlgo) return;
+
+        fetch(`/api/control/switch-algorithm?name=${targetAlgo}`, { method: 'POST' })
+            .then(res => res.json())
+            .then(res => {
+                if (res.status === 'success') {
+                    activeServerAlgo = targetAlgo;
+                    paramToast.innerText = res.message;
+                    paramToast.className = "toast-msg c-green";
+
+                    // 🌟 立即动态重构表单项，数据源直接归零重置
+                    renderDynamicForm(targetAlgo, supportedAlgorithmsMeta[targetAlgo]);
+                    setTimeout(() => { paramToast.innerText = ""; }, 3000);
+                } else {
+                    alert(res.message);
+                    algoSelectMenu.value = activeServerAlgo; // 失败则回滚
+                }
+            })
+            .catch(err => alert("算法切换指令传输失败"));
+    });
+
+    // 触发初始化
+    loadAlgorithmsMetadata();
+
+    // ==========================================
+    // 3. 前端影子队列与 50ms 高频生命周期引擎
+    // ==========================================
+    const globalHistoryLabels = [];
+    const globalHistorySpeedData = [];
+    const globalHistoryPwmData = [];
+
+    let lastRenderedSeq = -1;
+    let isServerPaused = false;
+
+    function runTelemetryCore() {
+        fetch('/api/control/telemetry')
+            .then(res => res.json())
+            .then(data => {
+                // 3.1 刷新右侧及顶部全量诊断指标看板
+                document.getElementById('hzTopIndicator').innerText = `${data.actualFrequency.toFixed(1)} Hz`;
+                document.getElementById('srvStatus').innerText = data.serverStatus === 'RUNNING' ? 'ONLINE' : data.serverStatus;
+
+                document.getElementById('mTargetSpeed').innerText = `${data.targetSpeed.toFixed(1)} RPM`;
+                document.getElementById('mActualSpeed').innerText = `${data.actualSpeed.toFixed(1)} RPM`;
+                document.getElementById('mOutputPwm').innerText = data.outputPwm;
+                document.getElementById('mActiveAlgo').innerText = algoNameDict[data.currentAlgorithm] || data.currentAlgorithm;
+
+                document.getElementById('mTargetFrequency').innerText = `${data.targetFrequency.toFixed(1)} Hz`;
+                document.getElementById('mActualFrequency').innerText = `${data.actualFrequency.toFixed(1)} Hz`;
+                document.getElementById('mCommInterval').innerText = `${data.communicationInterval} ms`;
+                document.getElementById('mJitter').innerText = `${data.jitter} ms`;
+
+                document.getElementById('mSequenceNumber').innerText = data.sequenceNumber;
+                document.getElementById('mRtt').innerText = `${data.rtt.toFixed(3)} ms`;
+                document.getElementById('mLatency').innerText = `${data.latency.toFixed(3)} ms`;
+                document.getElementById('mDispatchLatency').innerText = `${data.commandDispatchLatency.toFixed(3)} μs`;
+
+                // 🌟 核心替换：在此处渲染带宽和TCP极限速率，抛弃原有的丢包率赋值
+                if (document.getElementById('mBaseBandwidth')) {
+                    document.getElementById('mBaseBandwidth').innerText = `${data.baseBandwidthKbps ? data.baseBandwidthKbps.toFixed(1) : '0.0'} Kbps`;
+                }
+                if (document.getElementById('mTcpLimit')) {
+                    document.getElementById('mTcpLimit').innerText = `${data.tcpMaxThroughputMbps ? data.tcpMaxThroughputMbps.toFixed(2) : '0.00'} Mbps`;
+                }
+
+
+                // 3.2 判定算法同步状态（防止多终端运行导致本地表单与服务器脱节）
+                if (data.currentAlgorithm !== activeServerAlgo) {
+                    activeServerAlgo = data.currentAlgorithm;
+                    algoSelectMenu.value = activeServerAlgo;
+                    renderDynamicForm(activeServerAlgo, data.currentParams);
+                }
+
+                // 3.3 🔒 核心锁逻辑：增加了 isSubmitting 状态拦截
+                // 如果系统正在提交参数，彻底挂起遥测对表单项的覆写动作
+                if (!isSubmitting) {
+                    if (focusedInputId !== 'inTargetSpeed') {
+                        document.getElementById('inTargetSpeed').value = data.targetSpeed;
+                    }
+                    if (focusedInputId !== 'inTargetHz') {
+                        document.getElementById('inTargetHz').value = data.targetFrequency;
+                    }
+
+                    // 遍历回填动态生成的算法专属参数项
+                    if (data.currentParams) {
+                        Object.keys(data.currentParams).forEach(key => {
+                            const targetId = `in_${key}`;
+                            if (focusedInputId !== targetId) {
+                                const inputEl = document.getElementById(targetId);
+                                if (inputEl) inputEl.value = data.currentParams[key];
+                            }
+                        });
+                    }
+                }
+                // 3.4 帧序去重判定
+                if (data.serverStatus === "PAUSED" || data.sequenceNumber === lastRenderedSeq) {
+                    return;
+                }
+                lastRenderedSeq = data.sequenceNumber;
+
+                const timeLabel = new Date().toLocaleTimeString();
+
+                // 3.5 无损压入全量影子队列
+                globalHistoryLabels.push(timeLabel);
+                globalHistorySpeedData.push(data.actualSpeed);
+                globalHistoryPwmData.push(data.outputPwm);
+
+                // 3.6 驱动示波器波形步进更新
+                if (!cfgShowAllHistory.checked) {
+                    scopeChart.data.labels.push(timeLabel);
+                    scopeChart.data.datasets[0].data.push(data.actualSpeed);
+                    scopeChart.data.datasets[1].data.push(data.outputPwm);
+
+                    const currentXWidth = parseInt(cfgXWidth.value) || 50;
+                    while (scopeChart.data.labels.length > currentXWidth) {
+                        scopeChart.data.labels.shift();
+                        scopeChart.data.datasets[0].data.shift();
+                        scopeChart.data.datasets[1].data.shift();
+                    }
+                    scopeChart.options.scales.x.ticks.display = false;
+                } else {
+                    scopeChart.data.labels.push(timeLabel);
+                    scopeChart.data.datasets[0].data.push(data.actualSpeed);
+                    scopeChart.data.datasets[1].data.push(data.outputPwm);
+                    scopeChart.options.scales.x.ticks.display = true;
+                }
+                scopeChart.update('none');
+            })
+            .catch(err => {
+                console.error("[高频遥测心跳中断]", err);
+                document.getElementById('srvStatus').innerText = "OFFLINE";
+            });
+    }
+
+    // 激活高频遥测引擎（50ms 周期循环）
+    setInterval(runTelemetryCore, 50);
+
+    // ==========================================
+    // 4. 独立控制事件解耦监听链路
+    // ==========================================
+    const paramToast = document.getElementById('paramToast');
+
+    // 4.1 监听：全历史复选框切换
+    cfgShowAllHistory.addEventListener('change', () => {
+        if (cfgShowAllHistory.checked) {
+            scopeChart.data.labels = [...globalHistoryLabels];
+            scopeChart.data.datasets[0].data = [...globalHistorySpeedData];
+            scopeChart.data.datasets[1].data = [...globalHistoryPwmData];
+            scopeChart.options.scales.x.ticks.display = true;
+        } else {
+            const currentXWidth = parseInt(cfgXWidth.value) || 50;
+            scopeChart.data.labels = globalHistoryLabels.slice(-currentXWidth);
+            scopeChart.data.datasets[0].data = globalHistorySpeedData.slice(-currentXWidth);
+            scopeChart.data.datasets[1].data = globalHistoryPwmData.slice(-currentXWidth);
+            scopeChart.options.scales.x.ticks.display = false;
+        }
+        scopeChart.update('none');
+    });
+
+    // 4.2 监听：下发通信速率配置独立下发
+    const inTargetHz = document.getElementById('inTargetHz');
+    inTargetHz.addEventListener('change', () => {
+        const hzVal = parseFloat(inTargetHz.value);
+        if (isNaN(hzVal) || hzVal <= 0) return;
+
+        fetch(`/api/control/frequency?hz=${hzVal}`, { method: 'POST' })
+            .then(res => res.text())
+            .then(msg => {
+                paramToast.innerText = msg;
+                paramToast.className = "toast-msg c-green";
+                setTimeout(() => { paramToast.innerText = ""; }, 3000);
+            })
+            .catch(err => {
+                paramToast.innerText = "通信速率下发失败";
+                paramToast.className = "toast-msg c-red";
+            });
+    });
+
+    // 4.3 监听：网闸通道挂起/恢复切换
+    const togglePauseBtn = document.getElementById('togglePauseBtn');
+    togglePauseBtn.addEventListener('click', () => {
+        const targetState = !isServerPaused;
+
+        fetch(`/api/control/receive-gate?pause=${targetState}`, { method: 'POST' })
+            .then(res => res.json())
+            .then(res => {
+                if (res.status === 'success') {
+                    isServerPaused = targetState;
+                    if (isServerPaused) {
+                        togglePauseBtn.innerText = "网闸：已暂停接收";
+                        togglePauseBtn.style.borderColor = "var(--neon-red)";
+                        togglePauseBtn.style.color = "var(--neon-red)";
+                        document.getElementById('srvStatus').innerText = "PAUSED";
+                    } else {
+                        togglePauseBtn.innerText = "网闸：持续接收中";
+                        togglePauseBtn.style.borderColor = "var(--neon-yellow)";
+                        togglePauseBtn.style.color = "var(--neon-yellow)";
+                        document.getElementById('srvStatus').innerText = "ONLINE";
+                    }
+                }
+            })
+            .catch(err => alert("网闸指令未能送达云端"));
+    });
+
+    // 4.4 监听：全动态调谐参数矩阵打包下发
+    // 1. 定义全局提交锁
+    let isSubmitting = false;
+
+    // 2. 🌟 致命修改点：将 'click' 改为 'mousedown' 抢占时序！
+    const submitParamsBtn = document.getElementById('submitParamsBtn');
+    submitParamsBtn.addEventListener('mousedown', () => {
+        // 抢在输入框失去焦点（blur）之前，立刻拉起全局写入保护网闸！
+        isSubmitting = true;
+        submitParamsBtn.disabled = true;
+        submitParamsBtn.innerText = "数据同步锁存中...";
+
+        // 此时输入框里的值依然是你手敲的新值，安全读取：
+        const payload = {
+            targetSpeed: parseFloat(document.getElementById('inTargetSpeed').value)
+        };
+
+        if (supportedAlgorithmsMeta[activeServerAlgo]) {
+            Object.keys(supportedAlgorithmsMeta[activeServerAlgo]).forEach(key => {
+                const el = document.getElementById(`in_${key}`);
+                if (el) {
+                    payload[key] = parseFloat(el.value);
+                }
+            });
+        }
+
+        console.log("【前端探针】成功抢断截获的新 Payload:", payload);
+
+        // 发送网络请求
+        fetch('/api/control/update-params', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+            .then(res => res.json())
+            .then(res => {
+                paramToast.innerText = res.message;
+                paramToast.className = res.status === 'success' ? "toast-msg c-green" : "toast-msg c-red";
+
+                // 延迟释放锁，确保后端内存数据已更新且能被下一次遥测抓取到
+                setTimeout(() => {
+                    isSubmitting = false;
+                    submitParamsBtn.disabled = false;
+                    submitParamsBtn.innerText = "向云端业务执行器注入更新参数";
+                    paramToast.innerText = "";
+                }, 150);
+            })
+            .catch(err => {
+                paramToast.innerText = "下发失败，请检查链路";
+                paramToast.className = "toast-msg c-red";
+                isSubmitting = false;
+                submitParamsBtn.disabled = false;
+                submitParamsBtn.innerText = "向云端业务执行器注入更新参数";
+            });
+    });
+
+    // 4.5 监听：离线 CSV 数据报表导出
+    const exportCsvBtn = document.getElementById('exportCsvBtn');
+    exportCsvBtn.addEventListener('click', () => {
+        exportCsvBtn.disabled = true;
+        fetch('/api/control/history')
+            .then(res => res.json())
+            .then(res => {
+                if (res.status === 'success' && res.data.length > 0) {
+                    let csvContent = "\uFEFFIndex,Timestamp,ActualSpeed(RPM),OutputPWM\n";
+                    res.data.forEach(item => {
+                        csvContent += `${item.id},${item.saveTime},${item.actualSpeed},${item.outputPwm}\n`;
+                    });
+
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const hiddenLink = document.createElement("a");
+                    hiddenLink.href = URL.createObjectURL(blob);
+                    hiddenLink.download = `CONTROL_LOOP_HISTORY_${new Date().toISOString().slice(0,10)}.csv`;
+                    document.body.appendChild(hiddenLink);
+                    hiddenLink.click();
+                    document.body.removeChild(hiddenLink);
+                } else {
+                    alert("未检测到有效控制日志记录。");
+                }
+            })
+            .catch(err => alert("全量日志提取失败"))
+            .finally(() => { exportCsvBtn.disabled = false; });
+    });
+</script>
+</body>
+</html>

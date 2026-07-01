@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>云端工业控制系统 - 实时监控面板</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 30px; }
+        /* 升级为4列网格布局，完美容纳通信速率监控卡片 */
+        .dashboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
+        .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; border-top: 5px solid #3498db; }
+        .card.target { border-top-color: #e67e22; }
+        .card.pwm { border-top-color: #2ecc71; }
+        .card.network { border-top-color: #9b59b6; } /* 紫色代表网络监控边界 */
+        .card-title { font-size: 14px; color: #7f8c8d; text-transform: uppercase; font-weight: bold; }
+        .card-value { font-size: 32px; font-weight: bold; margin: 10px 0; color: #2c3e50; }
+        .unit { font-size: 14px; font-weight: normal; color: #95a5a6; }
+        .sub-value { font-size: 12px; color: #7f8c8d; margin-top: 5px; }
+        .status-bar { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+        .status-badge { background-color: #2ecc71; color: white; padding: 5px 12px; border-radius: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>工业电机云端 PID 控制实时遥测看板</h1>
+
+    <div class="dashboard">
+        <div class="card target">
+            <div class="card-title">设定目标转速</div>
+            <div class="card-value" id="targetSpeed">0.0 <span class="unit">RPM</span></div>
+            <div class="sub-value">静态配置参考值</div>
+        </div>
+        <div class="card">
+            <div class="card-title">设备实际转速</div>
+            <div class="card-value" id="actualSpeed" style="color: #3498db;">0.0 <span class="unit">RPM</span></div>
+            <div class="sub-value">下位机传感器实时反馈</div>
+        </div>
+        <div class="card pwm">
+            <div class="card-title">云端 PID 输出控制量</div>
+            <div class="card-value" id="outputPwm" style="color: #2ecc71;">0</div>
+            <div class="sub-value">计算限幅区间: 0 - 250</div>
+        </div>
+        <div class="card network">
+            <div class="card-title">下位机上报速率 (速率监控)</div>
+            <div class="card-value" id="communicationRate" style="color: #9b59b6;">0.0 <span class="unit">Hz</span></div>
+            <div class="sub-value" id="communicationInterval">到达间隔: 0 ms</div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <div>系统状态: <span class="status-badge" id="serverStatus">正在监听</span></div>
+        <div style="color: #7f8c8d;">数据最后更新时间: <span id="updateTime">--:--:--</span></div>
+    </div>
+</div>
+
+<script>
+    // 每隔 300 毫秒（提高 Web 端轮询密度）自动向云端 Web 服务索取最新控制回路状态
+    function fetchTelemetry() {
+        fetch('/api/control/telemetry')
+            .then(response => response.json())
+            .then(data => {
+                // 1. 动态更新传统物理量数据
+                document.getElementById('targetSpeed').innerHTML = data.targetSpeed.toFixed(1) + ' <span class="unit">RPM</span>';
+                document.getElementById('actualSpeed').innerHTML = data.actualSpeed.toFixed(1) + ' <span class="unit">RPM</span>';
+                document.getElementById('outputPwm').innerText = data.outputPwm;
+                document.getElementById('serverStatus').innerText = data.serverStatus === 'RUNNING' ? '正常联动中' : '离线';
+
+                // 2. 动态更新拓展任务2：通信速率指标
+                document.getElementById('communicationRate').innerHTML = data.communicationRate.toFixed(1) + ' <span class="unit">Hz</span>';
+                document.getElementById('communicationInterval').innerText = '到达间隔: ' + data.communicationInterval + ' ms';
+
+                // 3. 格式化打印时间戳
+                const date = new Date(data.timestamp);
+                const timeString = date.toTimeString().split(' ')[0] + '.' + String(date.getMilliseconds()).padStart(3, '0');
+                document.getElementById('updateTime').innerText = timeString;
+            })
+            .catch(error => {
+                console.error('获取遥测数据失败:', error);
+                document.getElementById('serverStatus').innerText = '连接云端失败';
+                document.getElementById('serverStatus').style.backgroundColor = '#e74c3c';
+            });
+    }
+
+    // 启动定时器执行轮询任务
+    setInterval(fetchTelemetry, 300);
+    // 页面加载时立即执行一次
+    fetchTelemetry();
+</script>
+</body>
+</html>

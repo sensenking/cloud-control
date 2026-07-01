@@ -1,0 +1,30 @@
+server:
+  port: 8080
+
+industrial:
+  control:
+    server-port: 50008
+    target-speed: 1500.0
+    max-pwm: 250
+    min-pwm: 0
+    pid:
+      kp: 0.25
+      ki: 0.08
+      kd: 0.02
+
+spring:
+  datasource:
+    # 修正：末尾补充数据库文件名 cloudcontroldb
+    url: jdbc:h2:file:E:/NEU/Code/JAVA/cloud-control-server/data/cloudcontroldb;DB_CLOSE_ON_EXIT=FALSE;AUTO_RECONNECT=TRUE
+    driverClassName: org.h2.Driver
+    username: sa
+    password: password
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
